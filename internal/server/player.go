@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"os/exec"
-	"syscall"
 )
 
 func LaunchPlayer(streamURL string, preferred string) (string, error) {
@@ -25,7 +24,7 @@ func LaunchPlayer(streamURL string, preferred string) (string, error) {
 			// Detach into its own session so the player survives swrm exiting
 			// and doesn't hold swrm's controlling terminal, and discard its
 			// stdio so it can't block on a closed pipe.
-			cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+			cmd.SysProcAttr = detachedSysProcAttr()
 			cmd.Stdin = nil
 			cmd.Stdout = nil
 			cmd.Stderr = nil
