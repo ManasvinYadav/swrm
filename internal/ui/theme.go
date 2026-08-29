@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"fmt"
+	"math"
+	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -14,10 +16,20 @@ import (
 const (
 	ColorCanvas  = lipgloss.Color("#0b0c0e") // spec literal — app root background only.
 	ColorSurface = lipgloss.Color("#16181d") // spec literal — every card's fill.
-	ColorBorder  = lipgloss.Color("#252830") // spec literal — default unfocused card border,
+	// ColorBorder was originally #252830 (the spec literal), then #454b59
+	// after a first brightening pass — but #454b59 still measures only
+	// 2.03:1 against ColorSurface, under WCAG's 3:1 floor for non-text UI
+	// boundaries (SC 1.4.11). Brightened again to clear that floor with a
+	// real margin (3.28:1 vs Surface, 3.62:1 vs Canvas).
+	ColorBorder = lipgloss.Color("#616a80") // default unfocused card border,
 	// and the file-browser's selected-row pill background.
 
-	ColorAccentBlue = lipgloss.Color("#0a84ff") // spec literal — structure/focus/primary:
+	// ColorAccentBlue was originally Apple's system blue #0a84ff (4.87:1
+	// against ColorSurface) — legible, but Raycast's own published accent
+	// blue (#55b3ff) is both lighter and the actual token this theme is
+	// meant to echo, reaching 7.85:1 against the same surface. Matched to
+	// Raycast's real value rather than Apple's for both fidelity and a11y.
+	ColorAccentBlue = lipgloss.Color("#55b3ff") // structure/focus/primary:
 	// focused-panel border, active switcher-strip pill, progress-bar gradient
 	// start-stop, section headers, selection/attention.
 	ColorAccentCyan = lipgloss.Color("#05d9e8") // spec literal — live/success data: DL/UL
@@ -29,7 +41,10 @@ const (
 	ColorTextSecondary = lipgloss.Color("#86868b") // spec literal — muted/secondary text, footer.
 	ColorTextPrimary   = lipgloss.Color("#f5f5f7") // reasoned — primary body/heading text.
 	ColorAmber         = lipgloss.Color("#ff9f0a") // reasoned — queued/prefetch-piece heat.
-	ColorSlate         = lipgloss.Color("#3a3d45") // reasoned — cold-piece heat / disabled chrome.
+	// ColorSlate was originally #3a3d45 — nearly unreadable against
+	// ColorSurface for disabled file-browser entries and cold pieces.
+	// Brightened to an actually-legible muted gray.
+	ColorSlate = lipgloss.Color("#6b7280") // reasoned — cold-piece heat / disabled chrome.
 )
 
 var (
@@ -63,10 +78,93 @@ var (
 	StylePieceCold = lipgloss.NewStyle().Foreground(ColorSlate)        // not wanted yet
 )
 
-// NewProgressBar builds the animated gradient completion bar used by the
-// Inspector card, blending blue to purple per the spec.
-func NewProgressBar() progress.Model {
-	return progress.New(progress.WithGradient(string(ColorAccentBlue), string(ColorAccentPurple)))
+func hexRGB(hex string) [3]int {
+	h := strings.TrimPrefix(hex, "#")
+	r, _ := strconv.ParseInt(h[0:2], 16, 32)
+	g, _ := strconv.ParseInt(h[2:4], 16, 32)
+	b, _ := strconv.ParseInt(h[4:6], 16, 32)
+	return [3]int{int(r), int(g), int(b)}
+}
+
+func lerpRGB(a, b [3]int, t float64) lipgloss.Color {
+	r := int(float64(a[0]) + t*float64(b[0]-a[0]))
+	g := int(float64(a[1]) + t*float64(b[1]-a[1]))
+	bl := int(float64(a[2]) + t*float64(b[2]-a[2]))
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, bl))
+}
+
+var brandGradientStops = [][3]int{hexRGB(string(ColorAccentCyan)), hexRGB(string(ColorAccentBlue)), hexRGB(string(ColorAccentPurple)), hexRGB(string(ColorAccentCyan))}
+
+// brandGradientColorAt returns the signature cyan -> blue -> purple -> cyan
+// brand gradient color at position t, wrapping cyclically so an animated
+// phase offset sweeps smoothly with no hard reset at the loop point.
+func brandGradientColorAt(t float64) lipgloss.Color {
+	t -= math.Floor(t)
+	seg := t * float64(len(brandGradientStops)-1)
+	idx := int(seg)
+	if idx > len(brandGradientStops)-2 {
+		idx = len(brandGradientStops) - 2
+	}
+	return lerpRGB(brandGradientStops[idx], brandGradientStops[idx+1], seg-float64(idx))
+}
+
+// RenderGradientBanner paints lines with one smooth horizontal sweep of the
+// signature brand gradient shared across every line, so a block-letter logo
+// reads as one cohesive wordmark instead of per-line flat colors. phase
+// slowly advances (driven by the dashboard's existing 1s tick) for a subtle
+// ambient shimmer rather than a static print.
+func RenderGradientBanner(lines []string, phase float64) string {
+	maxLen := 0
+	for _, l := range lines {
+		if n := len([]rune(l)); n > maxLen {
+			maxLen = n
+		}
+	}
+	if maxLen == 0 {
+		return ""
+	}
+
+	var out strings.Builder
+	for li, line := range lines {
+		runes := []rune(line)
+		for i, r := range runes {
+			t := float64(i)/float64(maxLen) + phase
+			out.WriteString(lipgloss.NewStyle().Foreground(brandGradientColorAt(t)).Render(string(r)))
+		}
+		if li != len(lines)-1 {
+			out.WriteString("\n")
+		}
+	}
+	return out.String()
+}
+
+// RenderAnimatedBar draws the Inspector card's completion bar using the same
+// animated brand gradient (and phase) as the header wordmark, rather than
+// bubbles/progress's fixed two-color fill — a static gradient reads as
+// unanimated when the underlying download percentage barely moves between
+// ticks, so the bar's *color* sweeps continuously instead of relying on the
+// percentage itself for visible motion.
+func RenderAnimatedBar(width int, percent, phase float64) string {
+	if width < 1 {
+		width = 1
+	}
+	if percent < 0 {
+		percent = 0
+	} else if percent > 1 {
+		percent = 1
+	}
+	filled := int(float64(width)*percent + 0.5)
+
+	var out strings.Builder
+	for i := 0; i < width; i++ {
+		if i < filled {
+			t := float64(i)/float64(width) + phase
+			out.WriteString(lipgloss.NewStyle().Foreground(brandGradientColorAt(t)).Render("█"))
+		} else {
+			out.WriteString(lipgloss.NewStyle().Foreground(ColorBorder).Render("░"))
+		}
+	}
+	return out.String()
 }
 
 // cardTopRule draws a rounded top border — "╭─ TITLE ──────╮" — exactly

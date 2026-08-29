@@ -8,10 +8,16 @@ import (
 
 func renderNavPill(n int, label string, active bool) string {
 	text := fmt.Sprintf("[%d] %s", n, label)
-	style := lipgloss.NewStyle().Foreground(ColorTextSecondary)
+	borderColor, fg := ColorBorder, ColorTextSecondary
 	if active {
-		style = lipgloss.NewStyle().Foreground(ColorAccentBlue).Bold(true)
+		borderColor, fg = ColorAccentBlue, ColorAccentBlue
 	}
+	style := lipgloss.NewStyle().
+		Foreground(fg).
+		Bold(active).
+		Padding(0, 1).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor)
 	return style.Render(text)
 }
 
@@ -26,10 +32,18 @@ func renderHUD(focus focusTarget, section inspectorSection, vpnActive bool, vpnL
 		renderNavPill(3, "Swarm", section == sectionSwarm),
 		renderNavPill(4, "Streaming", false),
 	}
-	left := pills[0]
-	for _, p := range pills[1:] {
-		left += "   " + p
+	// Pills are bordered boxes (3 lines tall), so joining them with plain
+	// string "+" would only append after the last line rather than laying
+	// them out side by side — lipgloss.JoinHorizontal is required, same as
+	// the switcher strip.
+	spaced := make([]string, 0, len(pills)*2-1)
+	for i, p := range pills {
+		if i > 0 {
+			spaced = append(spaced, "  ")
+		}
+		spaced = append(spaced, p)
 	}
+	left := lipgloss.JoinHorizontal(lipgloss.Center, spaced...)
 
 	vpnStyle := StyleAccentCyan
 	vpnText := fmt.Sprintf("● VPN Active: %s", vpnLabel)
@@ -39,7 +53,7 @@ func renderHUD(focus focusTarget, section inspectorSection, vpnActive bool, vpnL
 	}
 	right := vpnStyle.Render(vpnText)
 
-	return left + lipgloss.NewStyle().PaddingLeft(4).Render(right)
+	return lipgloss.JoinHorizontal(lipgloss.Center, left, lipgloss.NewStyle().PaddingLeft(4).Render(right))
 }
 
 func renderFooter() string {

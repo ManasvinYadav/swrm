@@ -14,6 +14,26 @@ import (
 	"swrm/internal/server"
 )
 
+// The dashboard renders at a comfortable fixed size and centers within
+// whatever terminal it's given, rather than stretching every card to fill
+// an arbitrarily large window — a 240-column terminal shouldn't turn the
+// swarm heatmap into a mile-wide smear.
+const (
+	maxDashboardWidth  = 150
+	maxDashboardHeight = 51
+)
+
+func contentDims(width, height int) (int, int) {
+	cw, ch := width, height
+	if cw > maxDashboardWidth {
+		cw = maxDashboardWidth
+	}
+	if ch > maxDashboardHeight {
+		ch = maxDashboardHeight
+	}
+	return cw, ch
+}
+
 type sessionState int
 
 const (
@@ -59,6 +79,7 @@ type RootModel struct {
 	MessageErr  bool
 	width       int
 	height      int
+	logoPhase   float64
 }
 
 func NewRootModel(eng *engine.Engine, mediaPlayer, postCmd string) RootModel {
@@ -174,6 +195,15 @@ func dashboardTick() tea.Cmd {
 	return tea.Tick(time.Second, func(time.Time) tea.Msg { return dashboardTickMsg{} })
 }
 
+// logoTickMsg drives the header wordmark's gradient shimmer on its own fast
+// cadence, independent of the once-per-second data refresh above — the
+// gradient sweep needs to actually read as motion, not a once-a-second jump.
+type logoTickMsg struct{}
+
+func logoTick() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(time.Time) tea.Msg { return logoTickMsg{} })
+}
+
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -186,19 +216,21 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.FileTree != nil {
 			*m.FileTree, _ = m.FileTree.Update(msg)
 		}
-		m.Dashboard = m.Dashboard.Resize(msg.Width, msg.Height)
+		cw, ch := contentDims(msg.Width, msg.Height)
+		m.Dashboard = m.Dashboard.Resize(cw, ch)
 		return m, nil
 	case SplashFinishedMsg:
 		m.state = stateDashboard
-		return m, tea.Batch(dashboardTick(), m.Dashboard.FileBrowser.Init(), m.syncHeaderFocus())
+		return m, tea.Batch(dashboardTick(), logoTick(), m.Dashboard.FileBrowser.Init(), m.syncHeaderFocus())
 	case dashboardTickMsg:
 		if m.state == stateDashboard {
-			snap := m.Engine.Snapshot()
-			pct := 0.0
-			if snap.Length > 0 {
-				pct = float64(snap.Completed) / float64(snap.Length)
-			}
-			cmds = append(cmds, m.Dashboard.Inspector.Bar.SetPercent(pct), dashboardTick())
+			cmds = append(cmds, dashboardTick())
+		}
+		return m, tea.Batch(cmds...)
+	case logoTickMsg:
+		if m.state == stateDashboard {
+			m.logoPhase += 0.02
+			cmds = append(cmds, logoTick())
 		}
 		return m, tea.Batch(cmds...)
 	case torrentFileSelectedMsg:
@@ -248,6 +280,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == stateDashboard && m.FileTree == nil {
 				m.focus = (m.focus + 2) % 3
 				cmds = append(cmds, m.syncHeaderFocus())
+			}
+		case "down":
+			// Up/Down alias Tab/Shift+Tab so the 3-way focus cycle isn't
+			// Tab-only. Gated off when the file browser has focus since it
+			// already needs up/down for its own list navigation — left/right
+			// are similarly already claimed there (directory nav) and by the
+			// header (text cursor) and inspector (torrent switcher), so this
+			// alias only applies where up/down are otherwise idle.
+			if m.state == stateDashboard && m.FileTree == nil && m.focus != focusFileBrowser {
+				m.focus = (m.focus + 1) % 3
+				return m, m.syncHeaderFocus()
+			}
+		case "up":
+			if m.state == stateDashboard && m.FileTree == nil && m.focus != focusFileBrowser {
+				m.focus = (m.focus + 2) % 3
+				return m, m.syncHeaderFocus()
 			}
 		case "1", "2", "3", "4", "d", " ":
 			// These characters are also valid inside a pasted magnet URI or
@@ -353,7 +401,7 @@ func (m RootModel) View() string {
 	snap := m.Engine.Snapshot()
 	summaries := m.Engine.Summaries()
 
-	body := m.Dashboard.View(m.focus, snap, summaries)
+	body := m.Dashboard.View(m.focus, snap, summaries, m.logoPhase)
 
 	vpnLabel := m.Engine.VpnManager.InterfaceName
 	if vpnLabel == "" {
@@ -372,6 +420,13 @@ func (m RootModel) View() string {
 		view += "\n" + msgStyle.Render(m.Message)
 	}
 
+	// No WithWhitespaceBackground here: forcing a canvas fill across the
+	// Place() padding paints the *entire terminal* with ColorCanvas, hiding
+	// the user's own terminal background everywhere outside the explicit UI
+	// cards. Every card already paints its own Background(ColorSurface)
+	// fill via RenderCard, so the space Place() adds around the centered
+	// content should stay transparent to whatever background the user's
+	// terminal actually has.
 	if m.FileTree != nil {
 		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.FileTree.View())
 	} else if m.ShowDiagnostics {
@@ -383,6 +438,11 @@ func (m RootModel) View() string {
 		}
 		diag := NewDiagnosticsView().View(snap, stalled)
 		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, diag)
+	} else {
+		// The dashboard itself is rendered at a capped, comfortable size
+		// (contentDims) rather than stretched to fill the real terminal, so
+		// it always centers within whatever window the user actually has.
+		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, view)
 	}
 
 	return view

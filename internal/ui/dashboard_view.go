@@ -36,38 +36,39 @@ func NewDashboardView() DashboardView {
 func (d DashboardView) Resize(width, height int) DashboardView {
 	d.width, d.height = width, height
 
+	const logoHeight = 7 // 6-line ascii wordmark + 1 blank spacer
 	const headerHeight = 3
-	const hudHeight = 1
+	const hudHeight = 3 // nav pills are now bordered boxes: top rule + text + bottom rule
 	const footerHeight = 1
-	d.deckHeight = height - headerHeight - hudHeight - footerHeight
+	// RenderCard renders height_param+2 total lines: its own top-rule line,
+	// plus a bottom border line added by lipgloss.Style.Render *after* the
+	// Height() field is applied (verified against the vendored lipgloss
+	// source — border is appended post-height, not counted within it). Both
+	// deck cards are rendered at d.deckHeight, so the budget must reserve 2
+	// extra rows or the composed view overflows the terminal by exactly 2
+	// lines on every resize, corrupting the header/HUD/footer beneath it.
+	const cardChrome = 2
+	d.deckHeight = height - logoHeight - headerHeight - hudHeight - footerHeight - cardChrome
 	if d.deckHeight < 6 {
 		d.deckHeight = 6
 	}
 
-	leftWidth := width / 2
-	rightWidth := width - leftWidth
-
-	d.Header.Input.Width = width - 8
+	// HeaderInput.View wraps the textinput in Border (2 cols) + Padding(0,2)
+	// (4 cols) = 6 cols of chrome; the textinput's own Width must match that
+	// same interior budget or the two disagree about how much space is
+	// actually available, producing a stray misaligned fill at the edge.
+	d.Header.Input.Width = width - 6
 	d.FileBrowser.Picker.SetHeight(d.deckHeight - 3)
-	d.Inspector.Bar.Width = rightWidth - 12
-	if d.Inspector.Bar.Width < 5 {
-		d.Inspector.Bar.Width = 5
-	}
 	return d
 }
 
 // Update routes key messages only to the focused child (so, e.g., typing a
 // hex hash into the header doesn't leak arrow-key navigation into an
 // unfocused file browser), but forwards every other message type (async
-// directory listings, cursor blink ticks, progress bar frames) to all
-// children unconditionally so their internal state stays current regardless
-// of focus.
+// directory listings, cursor blink ticks) to all children unconditionally so
+// their internal state stays current regardless of focus.
 func (d DashboardView) Update(msg tea.Msg, focus focusTarget) (DashboardView, tea.Cmd) {
 	var cmds []tea.Cmd
-
-	inspector, cmd := d.Inspector.Update(msg)
-	d.Inspector = inspector
-	cmds = append(cmds, cmd)
 
 	_, isKey := msg.(tea.KeyMsg)
 
@@ -89,15 +90,16 @@ func (d DashboardView) Update(msg tea.Msg, focus focusTarget) (DashboardView, te
 	return d, tea.Batch(cmds...)
 }
 
-func (d DashboardView) View(focus focusTarget, snap engine.Snapshot, summaries []engine.TorrentSummary) string {
+func (d DashboardView) View(focus focusTarget, snap engine.Snapshot, summaries []engine.TorrentSummary, logoPhase float64) string {
+	logo := lipgloss.NewStyle().Width(d.width).Align(lipgloss.Center).Render(RenderGradientBanner(asciiBanner, logoPhase))
 	header := d.Header.View(d.width, focus == focusHeader)
 
 	leftWidth := d.width / 2
 	rightWidth := d.width - leftWidth
 
 	left := d.FileBrowser.View(leftWidth, d.deckHeight, focus == focusFileBrowser)
-	right := d.Inspector.View(rightWidth, d.deckHeight, snap, summaries, focus == focusInspector)
+	right := d.Inspector.View(rightWidth, d.deckHeight, snap, summaries, focus == focusInspector, logoPhase)
 	deck := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, deck)
+	return lipgloss.JoinVertical(lipgloss.Left, logo, "", header, deck)
 }

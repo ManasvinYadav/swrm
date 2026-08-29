@@ -2,7 +2,7 @@
   <defs>
     <linearGradient id="swrmGradient" x1="0" y1="0" x2="640" y2="0" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#05d9e8"/>
-      <stop offset="50%" stop-color="#0a84ff"/>
+      <stop offset="50%" stop-color="#55b3ff"/>
       <stop offset="100%" stop-color="#bf5af2"/>
     </linearGradient>
   </defs>

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type FileTreeView struct {
@@ -60,21 +61,32 @@ func (m FileTreeView) Update(msg tea.Msg) (FileTreeView, tea.Cmd) {
 
 func (m FileTreeView) View() string {
 	var sb strings.Builder
-	sb.WriteString(StyleSecondary.Render("Space to toggle, 1-5 to set priority, Enter confirm, Esc abort:\n\n"))
+	// Every styled span below carries its own explicit Background(ColorSurface)
+	// rather than relying on RenderCard's outer background to show through:
+	// lipgloss/termenv concatenate raw ANSI codes rather than compositing
+	// layers, so each styled span's own reset code (emitted at its end)
+	// clobbers whatever background the outer card style set earlier on that
+	// line — anything rendered after that reset (even later plain,
+	// unstyled text on the same line) falls back to the terminal's own
+	// default background instead of ColorSurface unless it's explicitly
+	// re-applied too.
+	sb.WriteString(StyleSecondary.Background(ColorSurface).Render("Space to toggle, 1-5 to set priority, Enter confirm, Esc abort:") + "\n\n")
 
 	for i, file := range m.Files {
-		cursor := "  "
+		cursor := lipgloss.NewStyle().Background(ColorSurface).Render("  ")
 		if m.Cursor == i {
-			cursor = StyleAccentBlue.Render("▶ ")
+			cursor = StyleAccentBlue.Background(ColorSurface).Render("> ")
 		}
 
 		prio := m.Priorities[i]
-		checked := StyleSlate.Render("[ ]")
+		checked := StyleSlate.Background(ColorSurface).Render("[ ]")
 		if prio > 0 {
-			checked = StyleAccentCyan.Render(fmt.Sprintf("[%d]", prio))
+			checked = StyleAccentCyan.Background(ColorSurface).Render(fmt.Sprintf("[%d]", prio))
 		}
+		file = StylePrimary.Background(ColorSurface).Render(file)
+		gap := lipgloss.NewStyle().Background(ColorSurface).Render(" ")
 
-		sb.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checked, file))
+		sb.WriteString(cursor + checked + gap + file + "\n")
 	}
 	return RenderCard("SELECT FILES", sb.String(), 0, 0, true)
 }

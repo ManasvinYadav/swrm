@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent"
-	"github.com/charmbracelet/bubbles/progress"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"swrm/internal/engine"
 )
@@ -24,18 +22,11 @@ const (
 // animated gradient progress bar, transfer gauges, the swarm heatmap, and
 // the connected-peer list.
 type InspectorView struct {
-	Bar     progress.Model
 	Section inspectorSection
 }
 
 func NewInspectorView() InspectorView {
-	return InspectorView{Bar: NewProgressBar(), Section: sectionGauges}
-}
-
-func (m InspectorView) Update(msg tea.Msg) (InspectorView, tea.Cmd) {
-	pm, cmd := m.Bar.Update(msg)
-	m.Bar = pm.(progress.Model)
-	return m, cmd
+	return InspectorView{Section: sectionGauges}
 }
 
 func renderSwitcherStrip(summaries []engine.TorrentSummary) string {
@@ -162,7 +153,7 @@ func renderPeerList(peers []engine.PeerSnapshot, maxRows int) string {
 	return sb.String()
 }
 
-func (m InspectorView) View(width, height int, snap engine.Snapshot, summaries []engine.TorrentSummary, focused bool) string {
+func (m InspectorView) View(width, height int, snap engine.Snapshot, summaries []engine.TorrentSummary, focused bool, logoPhase float64) string {
 	var sb strings.Builder
 	sb.WriteString(renderSwitcherStrip(summaries))
 
@@ -190,8 +181,7 @@ func (m InspectorView) View(width, height int, snap engine.Snapshot, summaries [
 	if barWidth < 5 {
 		barWidth = 5
 	}
-	m.Bar.Width = barWidth
-	bar := fmt.Sprintf("%s %.0f%%", m.Bar.View(), progressPct*100)
+	bar := fmt.Sprintf("%s %.0f%%", RenderAnimatedBar(barWidth, progressPct, logoPhase), progressPct*100)
 
 	gaugesLabel := "Transfer:"
 	if m.Section == sectionGauges {
