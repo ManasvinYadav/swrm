@@ -13,6 +13,21 @@ is no built-in search or indexer — you bring a magnet URI, an infohash, or a l
 swarm dashboard, and one-key streaming into `mpv`/`vlc`/`iina` while the torrent is still
 downloading.
 
+## Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Quick look](#quick-look)
+- [Keybindings](#keybindings)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [How it works](#how-it-works)
+- [Development](#development)
+- [Releasing (maintainers)](#releasing-maintainers)
+- [Security](#security)
+- [License](#license)
+
 ## Features
 
 - **Local-first, always.** Paste a `magnet:?xt=urn:btih:...` URI, a bare 40-char hex /
@@ -30,6 +45,16 @@ downloading.
 - **A dashboard that stays out of your way.** One persistent screen — magnet input, file
   browser, transfer inspector — with a 3-stop keyboard focus cycle instead of buried
   menus.
+
+## Requirements
+
+- **Prebuilt binaries** (npm, or downloaded directly from
+  [Releases](https://github.com/ManasvinYadav/swrm/releases)): macOS (arm64/amd64), Linux
+  (amd64/arm64), or Windows (amd64). Nothing else to install — the npm package's
+  `postinstall` step just downloads the matching one.
+- **Building from source**: Go 1.27+.
+- **Streaming** (optional, key `4`): one of `mpv`, `vlc`, or `iina` on your `PATH`.
+  Without one installed, everything else works — you just can't stream mid-download.
 
 ## Install
 
@@ -55,6 +80,16 @@ go build -o swrm ./cmd/swrm
 ./swrm
 ```
 
+### Uninstall
+
+```sh
+npm uninstall -g @manasvinyadav000/swrm
+```
+
+This also removes the downloaded binary under the package's own `dist/` directory. If you
+built from source, just delete the `swrm` binary you built and, optionally,
+`~/.config/swrm/config.yaml`.
+
 ## Quick look
 
 <p align="center"><img src="./assets/dashboard-mockup.svg" alt="swrm dashboard" width="900"></p>
@@ -64,6 +99,7 @@ go build -o swrm ./cmd/swrm
 | Key                | Action                                                          |
 | ------------------ | ---------------------------------------------------------------- |
 | `Tab` / `Shift+Tab` | Cycle keyboard focus: magnet input → file browser → inspector |
+| `↑` / `↓`           | Same 3-way focus cycle as Tab/Shift+Tab (disabled while the file browser has focus, since it needs ↑/↓ for its own list navigation) |
 | `1`                 | Jump focus to the magnet input                                 |
 | `2` / `3`           | Emphasize the inspector's transfer / swarm section              |
 | `4`                 | Stream the highlighted torrent (launches `mpv`/`vlc`/`iina`)     |
@@ -98,6 +134,34 @@ swrm -interface tun0
 
 If `interface` is set, `swrm` refuses to start unless that interface exists and is up,
 and every packet is bound to it for the lifetime of the process.
+
+## Troubleshooting
+
+**`interface <name> not found` / `interface <name> is down`** — `swrm` checks your
+`interface`/`-interface` value against the system's real network interfaces at startup
+and refuses to run if it's missing or down, rather than silently falling back to normal
+routing. Confirm the interface name with `ip addr` (Linux) or `ifconfig` (macOS) and that
+your VPN client has actually connected.
+
+**`interface <name> has no usable IPv4 address`** — the interface exists but hasn't been
+assigned an address yet; this usually means the VPN tunnel is still coming up. Wait for
+it to fully connect and retry.
+
+**`no suitable media player found`** (key `4`) — `swrm` looks for `mpv`, `vlc`, or `iina`
+on your `PATH` (in that order, or your `media_player` config value first). Install one of
+them, or set `media_player` in `config.yaml` to the exact command name of a player you
+have installed.
+
+**npm install fails or downloads nothing** — the npm package has no bundled binary; its
+`postinstall` step downloads the matching release asset from
+[GitHub Releases](https://github.com/ManasvinYadav/swrm/releases) for your OS/arch over
+HTTPS. If that fails (offline install, corporate proxy, GitHub rate-limiting), download
+the binary for your platform directly from Releases and put it on your `PATH`, or build
+from source instead.
+
+**Global npm install needs `sudo` / permission errors** — usually means npm's global
+prefix is owned by root. Fix your npm global prefix (see npm's own docs on this) rather
+than routinely running installs with `sudo`.
 
 ## How it works
 
