@@ -1,5 +1,5 @@
 {
-  "name": "swrm",
+  "name": "@manasvinyadav000/swrm",
   "version": "0.1.0",
   "description": "Local-first BitTorrent TUI with a VPN kill-switch and in-app streaming.",
   "homepage": "https://github.com/ManasvinYadav/swrm#readme",

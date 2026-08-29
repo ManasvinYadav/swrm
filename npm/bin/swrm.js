@@ -17,7 +17,7 @@ if (result.error) {
   if (result.error.code === 'ENOENT') {
     console.error(
       `[swrm] Could not find the swrm binary at:\n  ${binPath}\n\n` +
-        'Try reinstalling: npm install -g swrm'
+        'Try reinstalling: npm install -g @manasvinyadav000/swrm'
     );
   } else {
     console.error(`[swrm] Failed to launch: ${result.error.message}`);

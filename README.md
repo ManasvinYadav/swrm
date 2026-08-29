@@ -1,7 +1,7 @@
 <p align="center"><img src="./assets/banner.svg" alt="swrm" width="640"></p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/swrm"><img alt="npm" src="https://img.shields.io/npm/v/swrm.svg?style=flat-square&color=0a84ff&labelColor=16181d"></a>
+  <a href="https://www.npmjs.com/package/@manasvinyadav000/swrm"><img alt="npm" src="https://img.shields.io/npm/v/%40manasvinyadav000%2Fswrm.svg?style=flat-square&color=0a84ff&labelColor=16181d"></a>
   <a href="https://github.com/ManasvinYadav/swrm/releases"><img alt="release" src="https://img.shields.io/github/v/release/ManasvinYadav/swrm?style=flat-square&color=05d9e8&labelColor=16181d"></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-bf5af2.svg?style=flat-square&labelColor=16181d"></a>
   <img alt="platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-252830.svg?style=flat-square&labelColor=16181d">
@@ -36,14 +36,14 @@ downloading.
 **npm (recommended — installs a prebuilt binary, no Go toolchain required):**
 
 ```sh
-npm install -g swrm
+npm install -g @manasvinyadav000/swrm
 swrm
 ```
 
 **Or run it on demand without installing anything:**
 
 ```sh
-npx swrm
+npx @manasvinyadav000/swrm
 ```
 
 **From source** (requires Go 1.27+):
@@ -134,7 +134,8 @@ Pushing a tag matching `v*` (e.g. `v0.1.0`) triggers
 
 The `npm/` package itself ships no binary — its `postinstall` script downloads the
 matching release asset for the current platform/arch from GitHub Releases at install
-time, which is how `npm install -g swrm` and `npx swrm` stay lightweight.
+time, which is how `npm install -g @manasvinyadav000/swrm` and `npx @manasvinyadav000/swrm`
+stay lightweight.
 
 Before the first release, add an npm automation token as a repository secret named
 `NPM_TOKEN` (Settings → Secrets and variables → Actions).
