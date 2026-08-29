@@ -1,0 +1,20 @@
+# Go build output
+/swrm
+/swrm-*
+*.exe
+*.test
+*.out
+
+# Local runtime data
+/downloads/
+*.log
+
+# npm distribution artifacts (downloaded/built at install time, never committed)
+npm/dist/
+npm/node_modules/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

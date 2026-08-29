@@ -1,0 +1,43 @@
+{
+  "name": "swrm",
+  "version": "0.1.0",
+  "description": "Local-first BitTorrent TUI with a VPN kill-switch and in-app streaming.",
+  "homepage": "https://github.com/ManasvinYadav/swrm#readme",
+  "bugs": "https://github.com/ManasvinYadav/swrm/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ManasvinYadav/swrm.git"
+  },
+  "license": "MIT",
+  "author": "Manasvin Yadav",
+  "bin": {
+    "swrm": "./bin/swrm.js"
+  },
+  "files": [
+    "bin",
+    "scripts"
+  ],
+  "scripts": {
+    "postinstall": "node ./scripts/install.js"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=14"
+  },
+  "keywords": [
+    "bittorrent",
+    "torrent",
+    "tui",
+    "cli",
+    "streaming",
+    "vpn"
+  ]
+}

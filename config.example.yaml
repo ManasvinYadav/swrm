@@ -1,0 +1,13 @@
+# SWRM Configuration.
+# interface is optional: leave it "" (or omit it) to use standard system
+# routing. When set, SWRM refuses to start unless that interface exists and
+# is up, and binds all torrent traffic to it (VPN kill-switch behavior).
+interface: "wg0"
+dht: true
+listen_port: 6881
+download_dir: "~/Downloads/swrm"
+media_player: "auto"
+post_download_cmd: ""
+# Bytes/second; 0 means unlimited.
+download_limit: 0
+upload_limit: 0
