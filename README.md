@@ -1,19 +1,10 @@
-```
-███████╗██╗    ██╗██████╗ ███╗   ███╗
-██╔════╝██║    ██║██╔══██╗████╗ ████║
-███████╗██║ █╗ ██║██████╔╝██╔████╔██║
-╚════██║██║███╗██║██╔══██╗██║╚██╔╝██║
-███████║╚███╔███╔╝██║  ██║██║ ╚═╝ ██║
-╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝     ╚═╝
-```
-
-<p align="center"><b>Local-first BitTorrent, in your terminal.</b></p>
+<p align="center"><img src="./assets/banner.svg" alt="swrm" width="640"></p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/swrm"><img alt="npm" src="https://img.shields.io/npm/v/swrm.svg"></a>
-  <a href="https://github.com/ManasvinYadav/swrm/releases"><img alt="release" src="https://img.shields.io/github/v/release/ManasvinYadav/swrm"></a>
-  <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-informational.svg"></a>
-  <img alt="platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey">
+  <a href="https://www.npmjs.com/package/swrm"><img alt="npm" src="https://img.shields.io/npm/v/swrm.svg?style=flat-square&color=0a84ff&labelColor=16181d"></a>
+  <a href="https://github.com/ManasvinYadav/swrm/releases"><img alt="release" src="https://img.shields.io/github/v/release/ManasvinYadav/swrm?style=flat-square&color=05d9e8&labelColor=16181d"></a>
+  <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-bf5af2.svg?style=flat-square&labelColor=16181d"></a>
+  <img alt="platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-252830.svg?style=flat-square&labelColor=16181d">
 </p>
 
 `swrm` is a keyboard-driven BitTorrent client that lives entirely in your terminal. There
@@ -66,22 +57,7 @@ go build -o swrm ./cmd/swrm
 
 ## Quick look
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│ ⌘ Enter   magnet URI or hash... magnet:?xt=urn:btih:...             │
-├───────────────────────────────┬──────────────────────────────────--┤
-│ ╭─ Inbuilt .torrent browser ──╮│╭─ Active inspector & transfer ───╮ │
-│ │ 📁 Downloads                ││ ubuntu-24.04.1-live-server.iso   │ │
-│ │ 📁 Documents                ││ ████████████████░░░░░░░░  64%    │ │
-│ │ 📁 Movies                   ││ ↑ DL 12.4 MB/s   ↓ UL 1.1 MB/s    │ │
-│ │ 📄 arch-linux.torrent       ││ Swarm: ▰▰▰▱▰▰▱▱▰▰▰▰▱▰▰▱▰▰▰▱       │ │
-│ │ 📄 debian-net-inst.torrent  ││ ● 122.100.133.4   qBittorrent     │ │
-│ ╰──────────────────────────────╯╰───────────────────────────────╯ │
-├────────────────────────────────────────────────────────────────────┤
-│ [1] Search  [2] Transfers  [3] Swarm  [4] Streaming   ● VPN: tun0   │
-│           esc back · tab switch · ↵ submit · space pause · q quit  │
-└────────────────────────────────────────────────────────────────────┘
-```
+<p align="center"><img src="./assets/dashboard-mockup.svg" alt="swrm dashboard" width="900"></p>
 
 ## Keybindings
 

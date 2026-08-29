@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240" viewBox="0 0 640 240" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace">
+  <defs>
+    <linearGradient id="swrmGradient" x1="0" y1="0" x2="640" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#05d9e8"/>
+      <stop offset="50%" stop-color="#0a84ff"/>
+      <stop offset="100%" stop-color="#bf5af2"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="638" height="238" rx="18" fill="#0b0c0e" stroke="#252830" stroke-width="2"/>
+  <text x="28" y="56" font-size="19" fill="url(#swrmGradient)" xml:space="preserve">███████╗██╗    ██╗██████╗ ███╗   ███╗</text>
+  <text x="28" y="82" font-size="19" fill="url(#swrmGradient)" xml:space="preserve">██╔════╝██║    ██║██╔══██╗████╗ ████║</text>
+  <text x="28" y="108" font-size="19" fill="url(#swrmGradient)" xml:space="preserve">███████╗██║ █╗ ██║██████╔╝██╔████╔██║</text>
+  <text x="28" y="134" font-size="19" fill="url(#swrmGradient)" xml:space="preserve">╚════██║██║███╗██║██╔══██╗██║╚██╔╝██║</text>
+  <text x="28" y="160" font-size="19" fill="url(#swrmGradient)" xml:space="preserve">███████║╚███╔███╔╝██║  ██║██║ ╚═╝ ██║</text>
+  <text x="28" y="186" font-size="19" fill="url(#swrmGradient)" xml:space="preserve">╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝     ╚═╝</text>
+  <text x="28" y="216" font-size="13" fill="#86868b">local-first bittorrent, in your terminal</text>
+</svg>
