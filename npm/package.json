@@ -1,7 +1,7 @@
 {
   "name": "@manasvinyadav000/swrm",
   "version": "0.1.0",
-  "description": "Local-first BitTorrent TUI with a VPN kill-switch and in-app streaming.",
+  "description": "Local-first BitTorrent TUI with a VPN kill-switch and per-file download priority.",
   "homepage": "https://github.com/ManasvinYadav/swrm#readme",
   "bugs": "https://github.com/ManasvinYadav/swrm/issues",
   "repository": {
@@ -37,7 +37,6 @@
     "torrent",
     "tui",
     "cli",
-    "streaming",
     "vpn"
   ]
 }
