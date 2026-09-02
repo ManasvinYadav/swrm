@@ -9,17 +9,16 @@ import (
 )
 
 // DiagnosticsView is the swarm-health & dead-torrent diagnostics modal,
-// opened with 'd'. It renders a piece-state breakdown, the pieces the
-// endgame monitor has flagged as stalled past the streaming spec's 400ms
-// urgent-window deadline, and peer connectivity — everything
-// anacrolix/torrent's public API actually exposes. It intentionally does
-// not report per-tracker announce status: the library doesn't export that
-// surface, and fabricating it would be worse than leaving it out.
+// opened with 'd'. It renders a piece-state breakdown and peer connectivity
+// — everything anacrolix/torrent's public API actually exposes. It
+// intentionally does not report per-tracker announce status: the library
+// doesn't export that surface, and fabricating it would be worse than
+// leaving it out.
 type DiagnosticsView struct{}
 
 func NewDiagnosticsView() DiagnosticsView { return DiagnosticsView{} }
 
-func (d DiagnosticsView) View(snap engine.Snapshot, stalled []int) string {
+func (d DiagnosticsView) View(snap engine.Snapshot) string {
 	var sb strings.Builder
 	sb.WriteString(StyleSecondary.Render("(d or Esc to close)") + "\n\n")
 
@@ -37,9 +36,9 @@ func (d DiagnosticsView) View(snap engine.Snapshot, stalled []int) string {
 		switch {
 		case p.Complete:
 			complete++
-		case p.Priority == torrent.PiecePriorityNow || p.Priority == torrent.PiecePriorityHigh:
+		case p.Priority == torrent.PiecePriorityHigh || p.Priority == torrent.PiecePriorityReadahead:
 			urgent++
-		case p.Priority == torrent.PiecePriorityReadahead || p.Priority == torrent.PiecePriorityNormal:
+		case p.Priority == torrent.PiecePriorityNormal:
 			prefetch++
 		default:
 			none++
@@ -53,17 +52,6 @@ func (d DiagnosticsView) View(snap engine.Snapshot, stalled []int) string {
 		StylePieceCold.Render(fmt.Sprintf("%d", none)),
 		snap.PieceCount,
 	))
-
-	sb.WriteString(StyleAccentBlue.Render("Stall analysis") + StyleSecondary.Render(" (urgent buffer, >400ms without completing):") + "\n")
-	if len(stalled) == 0 {
-		sb.WriteString(StyleAccentCyan.Render("  None — playback buffer is keeping up.\n\n"))
-	} else {
-		labels := make([]string, len(stalled))
-		for i, idx := range stalled {
-			labels[i] = fmt.Sprintf("%d", idx)
-		}
-		sb.WriteString(StyleDanger.Render(fmt.Sprintf("  piece(s) %s escalated to highest priority\n\n", strings.Join(labels, ", "))))
-	}
 
 	sb.WriteString(StyleAccentBlue.Render("Swarm connectivity:") + "\n")
 	sb.WriteString(fmt.Sprintf("  %d peer(s) connected", len(snap.Peers)))

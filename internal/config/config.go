@@ -15,7 +15,6 @@ type Config struct {
 	DHT             bool   `yaml:"dht"`
 	ListenPort      int    `yaml:"listen_port"`
 	DownloadDir     string `yaml:"download_dir"`
-	MediaPlayer     string `yaml:"media_player"`
 	PostDownloadCmd string `yaml:"post_download_cmd"`
 	DownloadLimit   int    `yaml:"download_limit"`
 	UploadLimit     int    `yaml:"upload_limit"`
@@ -37,7 +36,6 @@ func Load() (*Config, error) {
 		DHT:         true,
 		ListenPort:  6881,
 		DownloadDir: filepath.Join(home, "Downloads", "swrm"),
-		MediaPlayer: "auto",
 	}
 
 	data, err := os.ReadFile(configPath)

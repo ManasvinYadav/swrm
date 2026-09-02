@@ -114,9 +114,9 @@ func generateBitfield(pieces []engine.PieceSnapshot, maxWidth int) string {
 		switch {
 		case p.Complete:
 			sb.WriteString(StylePieceDone.Render("█"))
-		case p.Priority == torrent.PiecePriorityNow || p.Priority == torrent.PiecePriorityHigh:
+		case p.Priority == torrent.PiecePriorityHigh || p.Priority == torrent.PiecePriorityReadahead:
 			sb.WriteString(StylePieceHot.Render("▒"))
-		case p.Priority == torrent.PiecePriorityReadahead || p.Priority == torrent.PiecePriorityNormal:
+		case p.Priority == torrent.PiecePriorityNormal:
 			sb.WriteString(StylePieceWarm.Render("░"))
 		default:
 			sb.WriteString(StylePieceCold.Render("·"))

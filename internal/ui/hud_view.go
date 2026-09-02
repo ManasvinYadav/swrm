@@ -24,13 +24,12 @@ func renderNavPill(n int, label string, active bool) string {
 // renderHUD renders the bar directly below the 50/50 deck: nav pills on the
 // left, VPN status pill on the right. Pills never swap to a separate
 // screen — 1 focuses the header, 2/3 reflect which Inspector section is
-// currently emphasized, 4 is a momentary streaming action.
+// currently emphasized.
 func renderHUD(focus focusTarget, section inspectorSection, vpnActive bool, vpnLabel string) string {
 	pills := []string{
 		renderNavPill(1, "Search", focus == focusHeader),
 		renderNavPill(2, "Transfers", section == sectionGauges),
 		renderNavPill(3, "Swarm", section == sectionSwarm),
-		renderNavPill(4, "Streaming", false),
 	}
 	// Pills are bordered boxes (3 lines tall), so joining them with plain
 	// string "+" would only append after the last line rather than laying

@@ -1,17 +1,14 @@
 package ui
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"swrm/internal/engine"
-	"swrm/internal/server"
 )
 
 // The dashboard renders at a comfortable fixed size and centers within
@@ -65,48 +62,26 @@ type RootModel struct {
 	fileTreeHash    metainfo.Hash // which torrent FileTree belongs to
 	ShowDiagnostics bool
 
-	Engine        *engine.Engine
-	Pickers       map[metainfo.Hash]*engine.PiecePicker
-	pickerCancels map[metainfo.Hash]context.CancelFunc
+	Engine *engine.Engine
 
-	StreamSrv        *server.StreamServer
-	streamingHash    metainfo.Hash
-	hasStreamingHash bool
-
-	MediaPlayer string
-	PostCmd     string
-	Message     string
-	MessageErr  bool
-	width       int
-	height      int
-	logoPhase   float64
+	Message    string
+	MessageErr bool
+	width      int
+	height     int
+	logoPhase  float64
 }
 
-func NewRootModel(eng *engine.Engine, mediaPlayer, postCmd string) RootModel {
+func NewRootModel(eng *engine.Engine) RootModel {
 	return RootModel{
-		state:         stateSplash,
-		Splash:        NewSplashModel(),
-		Dashboard:     NewDashboardView(),
-		Engine:        eng,
-		Pickers:       make(map[metainfo.Hash]*engine.PiecePicker),
-		pickerCancels: make(map[metainfo.Hash]context.CancelFunc),
-		MediaPlayer:   mediaPlayer,
-		PostCmd:       postCmd,
+		state:     stateSplash,
+		Splash:    NewSplashModel(),
+		Dashboard: NewDashboardView(),
+		Engine:    eng,
 	}
 }
 
 func (m RootModel) Init() tea.Cmd {
 	return tea.Batch(tea.EnterAltScreen, m.Splash.Init())
-}
-
-func (m *RootModel) Close() error {
-	for _, cancel := range m.pickerCancels {
-		cancel()
-	}
-	if m.StreamSrv == nil {
-		return nil
-	}
-	return m.StreamSrv.Close(context.Background())
 }
 
 // syncHeaderFocus focuses or blurs the header's textinput to match m.focus,
@@ -119,56 +94,6 @@ func (m *RootModel) syncHeaderFocus() tea.Cmd {
 	}
 	m.Dashboard.Header.Input.Blur()
 	return nil
-}
-
-// resetStreaming tears down any in-flight stream server. It does not touch
-// picker state — each torrent's picker lives as long as that torrent is
-// tracked, independent of which one is being streamed.
-func (m *RootModel) resetStreaming() {
-	if m.StreamSrv != nil {
-		_ = m.StreamSrv.Close(context.Background())
-		m.StreamSrv = nil
-	}
-	m.hasStreamingHash = false
-}
-
-// triggerStreaming streams the currently highlighted torrent, reusing (or
-// replacing, if a different torrent is now highlighted) any existing stream
-// server.
-func (m *RootModel) triggerStreaming() {
-	h, ok := m.Engine.Highlighted()
-	if !ok {
-		m.Message, m.MessageErr = "No highlighted torrent to stream", true
-		return
-	}
-	hash := h.T.InfoHash()
-	if m.StreamSrv == nil || !m.hasStreamingHash || m.streamingHash != hash {
-		m.resetStreaming()
-		picker := m.Pickers[hash]
-		if picker != nil {
-			m.StreamSrv = server.NewStreamServer(h.T, 0, picker)
-		} else {
-			m.StreamSrv = server.NewStreamServer(h.T, 0)
-		}
-		if err := m.StreamSrv.Start(); err != nil {
-			m.Message, m.MessageErr = err.Error(), true
-			m.StreamSrv = nil
-			return
-		}
-		m.streamingHash, m.hasStreamingHash = hash, true
-	}
-
-	streamURL := m.StreamSrv.URL()
-	player, err := server.LaunchPlayer(streamURL, m.MediaPlayer)
-	if err != nil {
-		m.Message = fmt.Sprintf("Stream: %s (copied to clipboard)", streamURL)
-		m.MessageErr = false
-		_ = clipboard.WriteAll(streamURL)
-	} else {
-		m.Message = fmt.Sprintf("Launched %s", player)
-		m.MessageErr = false
-		engine.Notify("SWRM", "Stream Buffer Ready")
-	}
 }
 
 type metadataMsg struct {
@@ -257,13 +182,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.FileTree = &ft
 		m.fileTreeHash = hash
 		m.Engine.HighlightHash(hash)
-
-		picker := engine.NewPiecePicker(msg.torrent)
-		picker.UpdateOffset(0)
-		ctx, cancel := context.WithCancel(context.Background())
-		m.Pickers[hash] = picker
-		m.pickerCancels[hash] = cancel
-		go picker.StartEndgameMonitor(ctx)
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -297,9 +215,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = (m.focus + 2) % 3
 				return m, m.syncHeaderFocus()
 			}
-		case "1", "2", "3", "4", "d", " ":
+		case "1", "2", "3", "d", " ":
 			// These characters are also valid inside a pasted magnet URI or
-			// hex/Base32 hash (e.g. "d" and "1"-"4" appear in hex), so they
+			// hex/Base32 hash (e.g. "d" and "1"-"3" appear in hex), so they
 			// only act as global shortcuts when the header does NOT have
 			// focus; with header focus they fall through untouched to be
 			// typed normally.
@@ -311,8 +229,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Dashboard.Inspector.Section = sectionGauges
 				case "3":
 					m.Dashboard.Inspector.Section = sectionSwarm
-				case "4":
-					m.triggerStreaming()
 				case "d":
 					m.ShowDiagnostics = true
 				case " ":
@@ -366,13 +282,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.FileTree.Aborted {
 				if h, ok := m.Engine.Get(m.fileTreeHash); ok {
 					for i, file := range h.T.Files() {
-						p := m.FileTree.Priorities[i]
-						if p == 0 {
-							file.SetPriority(torrent.PiecePriorityNone)
-						} else {
-							file.SetPriority(torrent.PiecePriorityNormal)
-							file.Download()
-						}
+						file.SetPriority(m.FileTree.Priorities[i])
 					}
 					m.Message = "File priorities applied"
 					m.MessageErr = false
@@ -430,13 +340,7 @@ func (m RootModel) View() string {
 	if m.FileTree != nil {
 		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.FileTree.View())
 	} else if m.ShowDiagnostics {
-		var stalled []int
-		if h, ok := m.Engine.Highlighted(); ok {
-			if picker, ok2 := m.Pickers[h.T.InfoHash()]; ok2 {
-				stalled = picker.StalledPieces()
-			}
-		}
-		diag := NewDiagnosticsView().View(snap, stalled)
+		diag := NewDiagnosticsView().View(snap)
 		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, diag)
 	} else {
 		// The dashboard itself is rendered at a capped, comfortable size

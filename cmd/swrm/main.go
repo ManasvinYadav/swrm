@@ -41,17 +41,10 @@ func main() {
 		}
 	}()
 
-	// Stream server is initialized on demand in ui/model.go
-
-	rootModel := ui.NewRootModel(eng, cfg.MediaPlayer, cfg.PostDownloadCmd)
+	rootModel := ui.NewRootModel(eng)
 	p := tea.NewProgram(rootModel, tea.WithAltScreen())
 
-	finalModel, err := p.Run()
-	if root, ok := finalModel.(ui.RootModel); ok {
-		if closeErr := root.Close(); closeErr != nil {
-			log.Printf("Failed to close stream server: %v", closeErr)
-		}
-	}
+	_, err = p.Run()
 	if err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)

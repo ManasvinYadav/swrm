@@ -9,9 +9,8 @@
 
 `swrm` is a keyboard-driven BitTorrent client that lives entirely in your terminal. There
 is no built-in search or indexer — you bring a magnet URI, an infohash, or a local
-`.torrent` file, and `swrm` does the rest: metadata resolution, piece scheduling, a live
-swarm dashboard, and one-key streaming into `mpv`/`vlc`/`iina` while the torrent is still
-downloading.
+`.torrent` file, and `swrm` does the rest: metadata resolution, per-file download
+selection, and a live swarm dashboard.
 
 ## Contents
 
@@ -39,9 +38,9 @@ downloading.
 - **Multi-torrent, one dashboard.** Add several torrents; switch which one is
   "highlighted" with the arrow keys and a slim switcher strip appears automatically.
 - **Real pause/resume**, per torrent — not a rate-limit hack.
-- **Stream while downloading.** Sequential piece prioritization keeps a rolling playback
-  buffer ahead of your player, with stall detection and priority escalation for anything
-  that falls behind.
+- **Per-file selection and priority.** Once a torrent's metadata resolves, pick exactly
+  which files to download and set each one to Low, Normal, or High priority — everything
+  else is skipped outright, not just downloaded last.
 - **A dashboard that stays out of your way.** One persistent screen — magnet input, file
   browser, transfer inspector — with a 3-stop keyboard focus cycle instead of buried
   menus.
@@ -53,8 +52,6 @@ downloading.
   (amd64/arm64), or Windows (amd64). Nothing else to install — the npm package's
   `postinstall` step just downloads the matching one.
 - **Building from source**: Go 1.27+.
-- **Streaming** (optional, key `4`): one of `mpv`, `vlc`, or `iina` on your `PATH`.
-  Without one installed, everything else works — you just can't stream mid-download.
 
 ## Install
 
@@ -102,13 +99,29 @@ built from source, just delete the `swrm` binary you built and, optionally,
 | `↑` / `↓`           | Same 3-way focus cycle as Tab/Shift+Tab (disabled while the file browser has focus, since it needs ↑/↓ for its own list navigation) |
 | `1`                 | Jump focus to the magnet input                                 |
 | `2` / `3`           | Emphasize the inspector's transfer / swarm section              |
-| `4`                 | Stream the highlighted torrent (launches `mpv`/`vlc`/`iina`)     |
 | `←` / `→`           | Switch the highlighted torrent (when the inspector has focus)   |
 | `Space`             | Pause / resume the highlighted torrent                          |
 | `Enter`             | Add a magnet (header) or open/select a file (browser)           |
 | `d`                 | Toggle the diagnostics panel                                     |
 | `Esc`               | Close a modal / go back                                          |
 | `q` / `Ctrl+C`      | Quit                                                             |
+
+### File selection
+
+Once a torrent's metadata resolves, a SELECT FILES modal opens listing every file inside
+it:
+
+| Key           | Action                                                        |
+| ------------- | -------------------------------------------------------------- |
+| `↑` / `↓`     | Move the cursor                                                |
+| `Space`       | Toggle the highlighted file between skipped and included        |
+| `←` / `→`     | Lower / raise the highlighted file's priority: Low, Normal, High |
+| `Enter`       | Confirm — apply every file's selection and priority             |
+| `Esc`         | Close without applying any changes                              |
+
+Skipped files are never downloaded. Priority controls request order among the files you
+did select: `High` pieces are requested ahead of `Normal`, which are requested ahead of
+`Low`.
 
 ## Configuration
 
@@ -120,7 +133,6 @@ interface: "wg0"          # network interface to bind to; "" = standard system r
 dht: true
 listen_port: 6881
 download_dir: "~/Downloads/swrm"
-media_player: "auto"      # "auto", or one of mpv / vlc / iina
 post_download_cmd: ""     # shell command to run after a transfer completes
 download_limit: 0         # bytes/sec, 0 = unlimited
 upload_limit: 0
@@ -147,11 +159,6 @@ your VPN client has actually connected.
 assigned an address yet; this usually means the VPN tunnel is still coming up. Wait for
 it to fully connect and retry.
 
-**`no suitable media player found`** (key `4`) — `swrm` looks for `mpv`, `vlc`, or `iina`
-on your `PATH` (in that order, or your `media_player` config value first). Install one of
-them, or set `media_player` in `config.yaml` to the exact command name of a player you
-have installed.
-
 **npm install fails or downloads nothing** — the npm package has no bundled binary; its
 `postinstall` step downloads the matching release asset from
 [GitHub Releases](https://github.com/ManasvinYadav/swrm/releases) for your OS/arch over
@@ -169,8 +176,7 @@ than routinely running installs with `sudo`.
 cmd/swrm/          entrypoint — config, VPN manager, engine, and the Bubble Tea program
 internal/config/   YAML + flag config loading
 internal/engine/   BitTorrent client wrapper, multi-torrent registry, VPN kill-switch,
-                    sequential piece picker, per-torrent snapshots
-internal/server/   local HTTP range server + media player launcher, for streaming
+                    per-torrent snapshots
 internal/ui/       the Bubble Tea dashboard (header, file browser, inspector, modals)
 ```
 

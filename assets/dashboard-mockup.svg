@@ -77,9 +77,6 @@
   <rect x="246" y="428" width="86" height="26" rx="6" fill="#0b0c0e" stroke="#252830" stroke-width="1.5"/>
   <text x="258" y="446" font-size="12" fill="#86868b">[3] Swarm</text>
 
-  <rect x="340" y="428" width="112" height="26" rx="6" fill="#0b0c0e" stroke="#252830" stroke-width="1.5"/>
-  <text x="352" y="446" font-size="12" fill="#86868b">[4] Streaming</text>
-
   <circle cx="742" cy="441" r="5" fill="#05d9e8"/>
   <text x="754" y="446" font-size="12" fill="#05d9e8">VPN: tun0</text>
 

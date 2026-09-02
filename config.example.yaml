@@ -6,7 +6,6 @@ interface: "wg0"
 dht: true
 listen_port: 6881
 download_dir: "~/Downloads/swrm"
-media_player: "auto"
 post_download_cmd: ""
 # Bytes/second; 0 means unlimited.
 download_limit: 0
