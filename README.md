@@ -89,6 +89,7 @@ built from source, just delete the `swrm` binary you built and, optionally,
 
 ## Quick look
 
+<p align="center"><img src="./assets/splash-demo.gif" alt="swrm startup animation" width="900"></p>
 <p align="center"><img src="./assets/dashboard-mockup.svg" alt="swrm dashboard" width="900"></p>
 
 ## Keybindings

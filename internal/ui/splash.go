@@ -105,7 +105,7 @@ func (m SplashModel) View() string {
 
 	// Ticks 21-40: Typewriter effect
 	if m.ticks >= 21 {
-		msg := "▶ terminal bittorrent & stream engine... █"
+		msg := "▶ local-first bittorrent client... █"
 		charsToShow := m.ticks - 21
 		if charsToShow > len(msg) {
 			charsToShow = len(msg)
