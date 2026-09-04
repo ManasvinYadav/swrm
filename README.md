@@ -1,4 +1,4 @@
-<p align="center"><img src="./assets/banner.svg" alt="swrm" width="640"></p>
+<p align="center"><img src="./assets/splash-demo.gif" alt="swrm startup animation" width="640"></p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@manasvinyadav000/swrm"><img alt="npm" src="https://img.shields.io/npm/v/%40manasvinyadav000%2Fswrm.svg?style=flat-square&color=55b3ff&labelColor=16181d"></a>
@@ -89,7 +89,6 @@ built from source, just delete the `swrm` binary you built and, optionally,
 
 ## Quick look
 
-<p align="center"><img src="./assets/splash-demo.gif" alt="swrm startup animation" width="900"></p>
 <p align="center"><img src="./assets/dashboard-mockup.svg" alt="swrm dashboard" width="900"></p>
 
 ## Keybindings
