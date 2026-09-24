@@ -74,13 +74,22 @@ func TestFilePriorityIsolatesDeselectedFiles(t *testing.T) {
 	skip.SetPriority(torrent.PiecePriorityNone)
 
 	// The client resolves each piece's local-storage completion status
-	// asynchronously after AddTorrent returns; effectivePriority() reports
-	// PiecePriorityNone for any piece until that resolves (see
-	// Piece.ignoreForRequests), which is a startup-timing detail unrelated
-	// to file-priority selection. Wait for it to settle so the assertions
-	// below are actually exercising priority behavior, not this race.
+	// asynchronously after AddTorrent returns, checking pieces one after
+	// another; effectivePriority() reports PiecePriorityNone for any piece
+	// until its own check finishes (see Piece.ignoreForRequests), which is a
+	// startup-timing detail unrelated to file-priority selection. Wait for
+	// every piece to settle, not just the first, so the assertions below are
+	// actually exercising priority behavior, not this race.
+	settled := func() bool {
+		for i := 0; i < tr.NumPieces(); i++ {
+			if s := tr.Piece(i).State(); !s.Ok || s.Checking || s.Marking {
+				return false
+			}
+		}
+		return true
+	}
 	deadline := time.Now().Add(3 * time.Second)
-	for tr.Piece(keep.BeginPieceIndex()).State().Priority == torrent.PiecePriorityNone {
+	for !settled() {
 		if time.Now().After(deadline) {
 			t.Fatal("timed out waiting for piece completion status to resolve")
 		}
