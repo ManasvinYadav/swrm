@@ -10,15 +10,18 @@ import (
 // can consume this value without retaining or mutating torrent-library
 // internals.
 type Snapshot struct {
-	Active               bool
-	Paused               bool
-	Hash                 string
-	Name                 string
-	Length, Completed    int64
-	PieceCount           int
-	Pieces               []PieceSnapshot
-	Peers                []PeerSnapshot
-	Downloaded, Uploaded int64
+	Active            bool
+	Paused            bool
+	Hash              string
+	Name              string
+	Length, Completed int64
+	// Selected/SelectedCompleted are Length/Completed restricted to the
+	// files the user chose to download; both 0 until a selection is applied.
+	Selected, SelectedCompleted int64
+	PieceCount                  int
+	Pieces                      []PieceSnapshot
+	Peers                       []PeerSnapshot
+	Downloaded, Uploaded        int64
 	// DownloadRate/UploadRate are the sum of each connected peer's own
 	// real-time rate (anacrolix/torrent's Peer.Stats()), the closest
 	// approximation of "current transfer speed" its public API exposes.
@@ -26,6 +29,17 @@ type Snapshot struct {
 	SampledAt                time.Time
 	VPNActive                bool
 }
+
+// Progress reports bytes done out of bytes wanted: the selected files once
+// a file selection is applied, since skipped files never download and would
+// otherwise hold progress below 100% forever; the whole torrent before that.
+func (s Snapshot) Progress() (done, total int64) {
+	if s.Selected > 0 {
+		return s.SelectedCompleted, s.Selected
+	}
+	return s.Completed, s.Length
+}
+
 type PieceSnapshot struct {
 	Complete bool
 	Priority torrent.PiecePriority
@@ -54,6 +68,7 @@ func (e *Engine) Snapshot() Snapshot {
 	s.Name = t.Name()
 	s.Length = t.Length()
 	s.Completed = t.BytesCompleted()
+	s.SelectedCompleted, s.Selected = selectedProgress(t)
 	s.PieceCount = t.NumPieces()
 	s.Pieces = make([]PieceSnapshot, s.PieceCount)
 	for i := 0; i < s.PieceCount; i++ {

@@ -67,9 +67,18 @@ function download(url, destPath, redirectsLeft) {
         }
 
         const fileStream = fs.createWriteStream(destPath);
+        // pipe() doesn't forward source errors, and a connection dropped
+        // mid-body would otherwise leave a truncated binary behind as if the
+        // install had succeeded. Close the file first so main() can delete
+        // it (Windows can't unlink an open file), and only then reject.
+        const abort = (err) => fileStream.destroy(err);
+        res.on('error', abort);
+        res.on('aborted', () => abort(new Error('connection closed before the download finished')));
         res.pipe(fileStream);
         fileStream.on('finish', () => fileStream.close(() => resolve()));
-        fileStream.on('error', reject);
+        // autoClose shuts the fd after an error; wait for that before
+        // rejecting so main() can delete the partial file.
+        fileStream.on('error', (err) => fileStream.once('close', () => reject(err)));
       }
     );
     request.on('error', reject);
@@ -99,7 +108,7 @@ async function main() {
       `Could not download the swrm binary.\n` +
         `  URL:    ${url}\n` +
         `  Reason: ${err.message}\n\n` +
-        `  If this keeps happening, build from source: https://github.com/${REPO}#building-from-source`
+        `  If this keeps happening, build from source: https://github.com/${REPO}#install`
     );
     return;
   }

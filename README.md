@@ -106,7 +106,7 @@ built from source, just delete the `swrm` binary you built and, optionally,
 | `Enter`             | Add a magnet (header) or open/select a file (browser)           |
 | `d`                 | Toggle the diagnostics panel                                     |
 | `Esc`               | Close a modal / go back                                          |
-| `q` / `Ctrl+C`      | Quit                                                             |
+| `q` / `Ctrl+C`      | Quit (`q` types normally while the magnet input has focus)       |
 
 ### File selection
 
@@ -135,7 +135,7 @@ interface: "wg0"          # network interface to bind to; "" = standard system r
 dht: true
 listen_port: 6881
 download_dir: "~/Downloads/swrm"
-post_download_cmd: ""     # shell command to run after a transfer completes
+post_download_cmd: ""     # shell command to run once a torrent's selected files finish
 download_limit: 0         # bytes/sec, 0 = unlimited
 upload_limit: 0
 ```
@@ -147,7 +147,9 @@ swrm -interface tun0
 ```
 
 If `interface` is set, `swrm` refuses to start unless that interface exists and is up,
-and every packet is bound to it for the lifetime of the process.
+and every packet is bound to it for the lifetime of the process. WebRTC peers (`wss://`
+trackers) and UPnP/NAT-PMP port forwarding are turned off in this mode, since neither can
+be confined to one interface.
 
 ## Troubleshooting
 

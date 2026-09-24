@@ -29,11 +29,16 @@ func NewInspectorView() InspectorView {
 	return InspectorView{Section: sectionGauges}
 }
 
-func renderSwitcherStrip(summaries []engine.TorrentSummary) string {
+// renderSwitcherStrip renders one pill per torrent, at most maxWidth cells
+// wide. When they don't all fit, it shows the run of neighbours around the
+// highlighted pill that does, so Left/Right never moves the highlight
+// off-screen.
+func renderSwitcherStrip(summaries []engine.TorrentSummary, maxWidth int) string {
 	if len(summaries) < 2 {
 		return ""
 	}
 	pills := make([]string, len(summaries))
+	hi := 0
 	for i, s := range summaries {
 		name := s.Name
 		if name == "" {
@@ -49,11 +54,31 @@ func renderSwitcherStrip(summaries []engine.TorrentSummary) string {
 		if s.Highlighted {
 			style = lipgloss.NewStyle().Background(ColorAccentBlue).Foreground(lipgloss.Color("#ffffff")).Bold(true).
 				Border(lipgloss.RoundedBorder()).BorderForeground(ColorAccentBlue)
+			hi = i
 		}
 		pills[i] = style.Render(label)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, pills...) + "\n\n"
+	lo, end := hi, hi+1
+	used := lipgloss.Width(pills[hi])
+	for grew := true; grew; {
+		grew = false
+		if end < len(pills) && used+lipgloss.Width(pills[end]) <= maxWidth {
+			used += lipgloss.Width(pills[end])
+			end++
+			grew = true
+		}
+		if lo > 0 && used+lipgloss.Width(pills[lo-1]) <= maxWidth {
+			used += lipgloss.Width(pills[lo-1])
+			lo--
+			grew = true
+		}
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, pills[lo:end]...) + "\n\n"
 }
+
+// switcherStripHeight is how many lines renderSwitcherStrip's output takes:
+// a row of bordered pills plus the blank spacer line after it.
+const switcherStripHeight = 4
 
 // formatRate renders an actual transfer rate, where zero legitimately means
 // "no throughput right now."
@@ -68,10 +93,11 @@ func formatRate(bytesPerSec float64) string {
 }
 
 func formatETA(snap engine.Snapshot) string {
-	if snap.Length <= 0 {
+	done, total := snap.Progress()
+	if total <= 0 {
 		return "—"
 	}
-	remaining := snap.Length - snap.Completed
+	remaining := total - done
 	if remaining <= 0 {
 		return "done"
 	}
@@ -125,16 +151,18 @@ func generateBitfield(pieces []engine.PieceSnapshot, maxWidth int) string {
 	return sb.String()
 }
 
+// renderPeerList renders at most maxRows lines, the last of them an "… and
+// N more" summary when not every peer fits.
 func renderPeerList(peers []engine.PeerSnapshot, maxRows int) string {
 	if len(peers) == 0 {
 		return StyleSecondary.Render("No connected peers.")
 	}
-	var sb strings.Builder
-	for i, p := range peers {
-		if i >= maxRows {
-			sb.WriteString(StyleSecondary.Render(fmt.Sprintf("… and %d more\n", len(peers)-maxRows)))
-			break
-		}
+	shown := peers
+	if len(peers) > maxRows {
+		shown = peers[:max(maxRows-1, 0)]
+	}
+	rows := make([]string, 0, maxRows)
+	for _, p := range shown {
 		client := p.Client
 		if client == "" {
 			client = "Unknown"
@@ -144,18 +172,25 @@ func renderPeerList(peers []engine.PeerSnapshot, maxRows int) string {
 		if p.DownloadRate == 0 && p.UploadRate == 0 {
 			health = StyleSlate.Render("●")
 		}
-		sb.WriteString(fmt.Sprintf("%s %-20s %-18s UL: %-10s DL: %-10s\n",
+		// Pad the rates before styling them: %-10s on an already-styled
+		// string counts its escape codes as width and never pads.
+		rows = append(rows, fmt.Sprintf("%s %-20s %-18s UL: %s DL: %s",
 			health, p.Address, client,
-			StyleAmber.Render(formatRate(p.UploadRate)),
-			StyleAmber.Render(formatRate(p.DownloadRate)),
+			StyleAmber.Render(fmt.Sprintf("%-10s", formatRate(p.UploadRate))),
+			StyleAmber.Render(fmt.Sprintf("%-10s", formatRate(p.DownloadRate))),
 		))
 	}
-	return sb.String()
+	if len(shown) < len(peers) {
+		rows = append(rows, StyleSecondary.Render(fmt.Sprintf("… and %d more", len(peers)-len(shown))))
+	}
+	return strings.Join(rows, "\n")
 }
 
 func (m InspectorView) View(width, height int, snap engine.Snapshot, summaries []engine.TorrentSummary, focused bool, logoPhase float64) string {
+	innerWidth := width - cardChromeWidth
 	var sb strings.Builder
-	sb.WriteString(renderSwitcherStrip(summaries))
+	strip := renderSwitcherStrip(summaries, innerWidth)
+	sb.WriteString(strip)
 
 	if !snap.Active {
 		sb.WriteString(StyleSecondary.Render("No active transfer. Add a magnet or .torrent file to begin."))
@@ -167,17 +202,25 @@ func (m InspectorView) View(width, height int, snap engine.Snapshot, summaries [
 	}
 
 	progressPct := 0.0
-	if snap.Length > 0 {
-		progressPct = float64(snap.Completed) / float64(snap.Length)
+	if done, total := snap.Progress(); total > 0 {
+		progressPct = float64(done) / float64(total)
 	}
 
 	pausedTag := ""
 	if snap.Paused {
-		pausedTag = StyleDanger.Render(" [PAUSED]")
+		pausedTag = " [PAUSED]"
 	}
-	nameLine := StyleAccentBlue.Bold(true).Render(fmt.Sprintf("%s [ %.1f MB ]", snap.Name, float64(snap.Length)/(1024*1024))) + pausedTag
+	// Shorten the name, not the size and paused tag after it, when the line
+	// is too long for the card.
+	sizeTag := fmt.Sprintf(" [ %.1f MB ]", float64(snap.Length)/(1024*1024))
+	name := truncate(snap.Name, max(innerWidth-len([]rune(sizeTag))-len(pausedTag), 1))
+	nameLine := StyleAccentBlue.Bold(true).Render(name + sizeTag)
+	if pausedTag != "" {
+		nameLine += StyleDanger.Render(pausedTag)
+	}
 
-	barWidth := width - 10
+	// Leave room for the " 100%" label after the bar.
+	barWidth := innerWidth - 5
 	if barWidth < 5 {
 		barWidth = 5
 	}
@@ -205,7 +248,7 @@ func (m InspectorView) View(width, height int, snap engine.Snapshot, summaries [
 	}
 	sb.WriteString(swarmLabel + "\n")
 
-	bf := generateBitfield(snap.Pieces, width-6)
+	bf := generateBitfield(snap.Pieces, innerWidth)
 	bfLines := strings.Split(bf, "\n")
 	const maxHeatmapRows = 2
 	if len(bfLines) > maxHeatmapRows {
@@ -214,7 +257,14 @@ func (m InspectorView) View(width, height int, snap engine.Snapshot, summaries [
 	sb.WriteString(strings.Join(bfLines, "\n") + "\n\n")
 
 	sb.WriteString(StyleAccentBlue.Bold(true).Render("Connected peers:") + "\n")
-	peerRows := height - 14
+	// Everything above the peer list: name, bar, blank, transfer label and
+	// gauges, blank, heatmap label, up to maxHeatmapRows of heatmap, blank,
+	// peers label — plus the switcher strip when it's showing.
+	const fixedLines = 9 + maxHeatmapRows
+	peerRows := height - cardPaddingHeight - fixedLines
+	if strip != "" {
+		peerRows -= switcherStripHeight
+	}
 	if peerRows < 1 {
 		peerRows = 1
 	}

@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/anacrolix/torrent"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestFileTreeViewPriorityCycling(t *testing.T) {
@@ -63,5 +65,27 @@ func TestFileTreeViewRendersPriorityLabels(t *testing.T) {
 	m.Priorities[0] = torrent.PiecePriorityNone
 	if view := m.View(); !strings.Contains(view, "[ ]") {
 		t.Fatalf("expected an empty checkbox for a skipped file, got:\n%s", view)
+	}
+}
+
+// TestFileTreeViewScrollsToCursor: a torrent with more files than the
+// terminal has rows used to render every one of them, running off the
+// screen and taking the cursor with it; long names ran off the side.
+func TestFileTreeViewScrollsToCursor(t *testing.T) {
+	files := make([]string, 200)
+	for i := range files {
+		files[i] = fmt.Sprintf("episode-%03d-%s.mkv", i, strings.Repeat("x", 100))
+	}
+	m := NewFileTreeView(files)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	for i := 0; i < 150; i++ {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	view := m.View()
+	if w, h := lipgloss.Width(view), lipgloss.Height(view); w > 80 || h > 20 {
+		t.Fatalf("modal is %dx%d, want it to fit an 80x20 terminal", w, h)
+	}
+	if !strings.Contains(view, "episode-150") {
+		t.Fatalf("cursor row scrolled out of view:\n%s", view)
 	}
 }

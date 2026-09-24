@@ -23,8 +23,13 @@ func normalizeMagnetInput(raw string) (string, error) {
 	switch {
 	case strings.HasPrefix(strings.ToLower(s), "magnet:?"):
 		return s, nil
-	case hexHashRE.MatchString(s), base32HashRE.MatchString(s):
+	case hexHashRE.MatchString(s):
 		return "magnet:?xt=urn:btih:" + s, nil
+	case base32HashRE.MatchString(s):
+		// The engine's magnet parser decodes Base32 with the standard
+		// (uppercase-only) alphabet, so a lowercase hash that passed the
+		// check above would still be rejected on submit.
+		return "magnet:?xt=urn:btih:" + strings.ToUpper(s), nil
 	default:
 		return "", fmt.Errorf("not a magnet URI or a 40-char hex / 32-char Base32 infohash")
 	}
@@ -34,6 +39,18 @@ func normalizeMagnetInput(raw string) (string, error) {
 // dashboard.
 type HeaderInput struct {
 	Input textinput.Model
+}
+
+// headerChromeWidth is HeaderInput.View's Border (2 cols) + Padding(0,2)
+// (4 cols).
+const headerChromeWidth = 6
+
+// SetWidth sizes the header to exactly width columns, border included. The
+// textinput's own Width is only its scrolling text area: the prompt and the
+// trailing cursor cell render beside it, so both come out of the budget too
+// or a long magnet URI wraps the header onto a second line.
+func (h *HeaderInput) SetWidth(width int) {
+	h.Input.Width = max(width-headerChromeWidth-lipgloss.Width(h.Input.Prompt)-1, 1)
 }
 
 func NewHeaderInput() HeaderInput {
@@ -73,7 +90,8 @@ func (h HeaderInput) View(width int, focused bool) string {
 		Background(ColorSurface).
 		Padding(0, 2)
 	if width > 0 {
-		style = style.Width(width)
+		// Width excludes the border, which lipgloss adds on top.
+		style = style.Width(width - 2)
 	}
 	return style.Render(h.Input.View())
 }

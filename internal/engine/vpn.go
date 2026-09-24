@@ -127,28 +127,36 @@ func (v *VpnManager) IPv4Address() (net.IP, error) {
 }
 
 func (v *VpnManager) Dialer() *net.Dialer {
-	return &net.Dialer{
-		Control: func(network, address string, c syscall.RawConn) error {
-			if v.InterfaceName == "" {
-				return nil
-			}
+	return &net.Dialer{Control: v.control}
+}
 
-			v.mu.RLock()
-			state := v.State
-			v.mu.RUnlock()
+// ListenPacket is Dialer's counterpart for unconnected UDP sockets, such as
+// the ones UDP tracker announces open: same interface binding, same refusal
+// once leak prevention has tripped.
+func (v *VpnManager) ListenPacket(network, addr string) (net.PacketConn, error) {
+	lc := net.ListenConfig{Control: v.control}
+	return lc.ListenPacket(context.Background(), network, addr)
+}
 
-			if state == StateHaltedLeakPrevention {
-				return errors.New("VPN interface dropped; leak prevention active")
-			}
-
-			var sockErr error
-			err := c.Control(func(fd uintptr) {
-				sockErr = bindToInterface(fd, v.InterfaceName, v.InterfaceIdx)
-			})
-			if err != nil {
-				return err
-			}
-			return sockErr
-		},
+func (v *VpnManager) control(network, address string, c syscall.RawConn) error {
+	if v.InterfaceName == "" {
+		return nil
 	}
+
+	v.mu.RLock()
+	state := v.State
+	v.mu.RUnlock()
+
+	if state == StateHaltedLeakPrevention {
+		return errors.New("VPN interface dropped; leak prevention active")
+	}
+
+	var sockErr error
+	err := c.Control(func(fd uintptr) {
+		sockErr = bindToInterface(fd, network, v.InterfaceName, v.InterfaceIdx)
+	})
+	if err != nil {
+		return err
+	}
+	return sockErr
 }
