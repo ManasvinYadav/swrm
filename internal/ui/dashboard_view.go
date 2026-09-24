@@ -40,6 +40,10 @@ func (d DashboardView) Resize(width, height int) DashboardView {
 	const headerHeight = 3
 	const hudHeight = 3 // nav pills are now bordered boxes: top rule + text + bottom rule
 	const footerHeight = 1
+	// RootModel.View appends its status message (e.g. "Fetching torrent
+	// metadata…") on one more line below the footer. Reserve it always, so
+	// the dashboard doesn't jump by a line whenever a message appears.
+	const messageHeight = 1
 	// RenderCard renders height_param+2 total lines: its own top-rule line,
 	// plus a bottom border line added by lipgloss.Style.Render *after* the
 	// Height() field is applied (verified against the vendored lipgloss
@@ -48,16 +52,12 @@ func (d DashboardView) Resize(width, height int) DashboardView {
 	// extra rows or the composed view overflows the terminal by exactly 2
 	// lines on every resize, corrupting the header/HUD/footer beneath it.
 	const cardChrome = 2
-	d.deckHeight = height - logoHeight - headerHeight - hudHeight - footerHeight - cardChrome
+	d.deckHeight = height - logoHeight - headerHeight - hudHeight - footerHeight - messageHeight - cardChrome
 	if d.deckHeight < 6 {
 		d.deckHeight = 6
 	}
 
-	// HeaderInput.View wraps the textinput in Border (2 cols) + Padding(0,2)
-	// (4 cols) = 6 cols of chrome; the textinput's own Width must match that
-	// same interior budget or the two disagree about how much space is
-	// actually available, producing a stray misaligned fill at the edge.
-	d.Header.Input.Width = width - 6
+	d.Header.SetWidth(width)
 	d.FileBrowser.Picker.SetHeight(d.deckHeight - 3)
 	return d
 }

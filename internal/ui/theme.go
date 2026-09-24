@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Apple Pro / Raycast Dark palette. Each color keeps exactly one job across
@@ -203,11 +204,26 @@ func cardTopRule(title string, totalWidth int, borderColor lipgloss.Color) strin
 	return corner.Render(b.TopLeft) + lead + labelStyled + rule + corner.Render(b.TopRight)
 }
 
+// Card chrome, in cells: RenderCard's left+right border, and the border plus
+// its Padding(1, 2) — i.e. how much narrower/shorter than the card its body
+// area is.
+const (
+	cardBorderWidth   = 2
+	cardChromeWidth   = cardBorderWidth + 4
+	cardPaddingHeight = 2
+)
+
 // RenderCard wraps body in the shared rounded card look — surface fill,
 // rounded border, title embedded in the top edge — the one titled-panel
 // look every bordered surface in the app uses. focused paints the border
 // ColorAccentBlue instead of ColorBorder; it's the dashboard's sole visual
 // focus indicator. width/height <= 0 leave that dimension auto-sized.
+//
+// width is the card's full rendered width, borders included; height is the
+// box below the title rule, bottom border excluded (so the card is height+2
+// lines). The body is clipped to fit rather than wrapped or allowed to grow
+// the card, so one long line or an overfull list can't push the rest of the
+// dashboard past the terminal's edge.
 func RenderCard(title, body string, width, height int, focused bool) string {
 	borderColor := ColorBorder
 	if focused {
@@ -220,12 +236,32 @@ func RenderCard(title, body string, width, height int, focused bool) string {
 		Foreground(ColorTextPrimary).
 		Padding(1, 2)
 	if width > 0 {
-		style = style.Width(width)
+		// lipgloss's Width covers content and padding but not the border,
+		// which it adds on top.
+		style = style.Width(width - cardBorderWidth)
 	}
 	if height > 0 {
 		style = style.Height(height)
 	}
+	body = clipBlock(body, width-cardChromeWidth, height-cardPaddingHeight)
 	box := style.Render(body)
 	top := cardTopRule(title, lipgloss.Width(box), borderColor)
 	return lipgloss.JoinVertical(lipgloss.Left, top, box)
+}
+
+// clipBlock cuts s down to at most maxLines lines of at most maxWidth cells
+// each, ANSI-aware. It truncates rather than pads (padding here would be
+// unstyled and bleed the terminal background, see NewFileBrowserView). A
+// limit <= 0 leaves that dimension alone.
+func clipBlock(s string, maxWidth, maxLines int) string {
+	lines := strings.Split(s, "\n")
+	if maxLines > 0 && len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+	if maxWidth > 0 {
+		for i, l := range lines {
+			lines[i] = ansi.Truncate(l, maxWidth, "")
+		}
+	}
+	return strings.Join(lines, "\n")
 }

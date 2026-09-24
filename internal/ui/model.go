@@ -61,6 +61,9 @@ type RootModel struct {
 	FileTree        *FileTreeView
 	fileTreeHash    metainfo.Hash // which torrent FileTree belongs to
 	ShowDiagnostics bool
+	// pendingFileTrees holds torrents whose metadata resolved while FileTree
+	// was already open for another one; each gets its turn when it closes.
+	pendingFileTrees []*torrent.Torrent
 
 	Engine *engine.Engine
 
@@ -145,6 +148,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Dashboard = m.Dashboard.Resize(cw, ch)
 		return m, nil
 	case SplashFinishedMsg:
+		// Each key pressed during the splash sends one of these, and so can
+		// its final tick. Starting the tick loops below once per message
+		// would stack duplicate loops (a double-speed logo, extra redraws)
+		// for the rest of the session.
+		if m.state != stateSplash {
+			return m, nil
+		}
 		m.state = stateDashboard
 		return m, tea.Batch(dashboardTick(), logoTick(), m.Dashboard.FileBrowser.Init(), m.syncHeaderFocus())
 	case dashboardTickMsg:
@@ -172,21 +182,38 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.MessageErr = true
 			return m, nil
 		}
-		hash := msg.torrent.InfoHash()
-		files := msg.torrent.Files()
-		names := make([]string, len(files))
-		for i, f := range files {
-			names[i] = f.DisplayPath()
+		if m.FileTree != nil {
+			// Another torrent's selection modal is still open. Replacing it
+			// would drop that torrent's selection, and a torrent that never
+			// gets one downloads nothing, so queue this one behind it.
+			if hash := msg.torrent.InfoHash(); hash != m.fileTreeHash && !m.fileTreePending(hash) {
+				m.pendingFileTrees = append(m.pendingFileTrees, msg.torrent)
+			}
+			return m, nil
 		}
-		ft := NewFileTreeView(names)
-		m.FileTree = &ft
-		m.fileTreeHash = hash
-		m.Engine.HighlightHash(hash)
+		m.openFileTree(msg.torrent)
 		return m, nil
 	case tea.KeyMsg:
+		if m.ShowDiagnostics && m.FileTree == nil {
+			// The diagnostics panel replaces the whole view, so it's modal:
+			// keys mustn't reach the hidden dashboard behind it, where Space
+			// would pause a torrent or Enter submit the header unseen.
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
+			case "d", "esc":
+				m.ShowDiagnostics = false
+			}
+			return m, nil
+		}
 		switch msg.String() {
-		case "ctrl+c", "q":
-			if m.state != stateSplash {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "q":
+			// Like the shortcuts below, "q" can be part of a magnet URI (a
+			// dn= name, or a lowercase Base32 hash), so it only quits when
+			// the header isn't taking text input.
+			if m.state != stateSplash && (m.focus != focusHeader || m.FileTree != nil) {
 				return m, tea.Quit
 			}
 		case "tab":
@@ -265,11 +292,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-		case "esc":
-			if m.ShowDiagnostics {
-				m.ShowDiagnostics = false
-				return m, nil
-			}
 		}
 	}
 
@@ -289,6 +311,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.FileTree = nil
+			if len(m.pendingFileTrees) > 0 {
+				next := m.pendingFileTrees[0]
+				m.pendingFileTrees = m.pendingFileTrees[1:]
+				m.openFileTree(next)
+			}
 		}
 		cmds = append(cmds, cmd)
 	} else {
@@ -297,6 +324,30 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// openFileTree opens the file-selection modal for t, whose info has
+// resolved, and highlights it.
+func (m *RootModel) openFileTree(t *torrent.Torrent) {
+	files := t.Files()
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = f.DisplayPath()
+	}
+	ft := NewFileTreeView(names)
+	ft.SetSize(m.width, m.height)
+	m.FileTree = &ft
+	m.fileTreeHash = t.InfoHash()
+	m.Engine.HighlightHash(t.InfoHash())
+}
+
+func (m RootModel) fileTreePending(hash metainfo.Hash) bool {
+	for _, t := range m.pendingFileTrees {
+		if t.InfoHash() == hash {
+			return true
+		}
+	}
+	return false
 }
 
 func (m RootModel) View() string {
@@ -320,15 +371,17 @@ func (m RootModel) View() string {
 	hud := renderHUD(m.focus, m.Dashboard.Inspector.Section, snap.VPNActive, vpnLabel)
 	footer := renderFooter()
 
-	view := body + "\n" + hud + "\n" + footer
-
+	// The message line is always there, empty or not (DashboardView.Resize
+	// budgets for it), so a message appearing doesn't shift the layout.
+	msgLine := ""
 	if m.Message != "" {
 		msgStyle := StyleAccentCyan
 		if m.MessageErr {
 			msgStyle = StyleDanger
 		}
-		view += "\n" + msgStyle.Render(m.Message)
+		msgLine = msgStyle.Render(m.Message)
 	}
+	view := body + "\n" + hud + "\n" + footer + "\n" + msgLine
 
 	// No WithWhitespaceBackground here: forcing a canvas fill across the
 	// Place() padding paints the *entire terminal* with ColorCanvas, hiding

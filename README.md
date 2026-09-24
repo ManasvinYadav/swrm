@@ -106,7 +106,7 @@ built from source, just delete the `swrm` binary you built and, optionally,
 | `Enter`             | Add a magnet (header) or open/select a file (browser)           |
 | `d`                 | Toggle the diagnostics panel                                     |
 | `Esc`               | Close a modal / go back                                          |
-| `q` / `Ctrl+C`      | Quit                                                             |
+| `q` / `Ctrl+C`      | Quit (`q` types normally while the magnet input has focus)       |
 
 ### File selection
 
