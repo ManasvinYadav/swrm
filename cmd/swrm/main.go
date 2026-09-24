@@ -28,7 +28,7 @@ func main() {
 	defer cancel()
 	go vpnMgr.StartHeartbeat(ctx)
 
-	eng, err := engine.NewEngine(vpnMgr, cfg.DownloadDir, engine.Options{DownloadDir: cfg.DownloadDir, ListenPort: cfg.ListenPort, DHT: cfg.DHT, DownloadLimit: cfg.DownloadLimit, UploadLimit: cfg.UploadLimit})
+	eng, err := engine.NewEngine(vpnMgr, cfg.DownloadDir, engine.Options{DownloadDir: cfg.DownloadDir, ListenPort: cfg.ListenPort, DHT: cfg.DHT, DownloadLimit: cfg.DownloadLimit, UploadLimit: cfg.UploadLimit, PostDownloadCmd: cfg.PostDownloadCmd})
 	if err != nil {
 		log.Fatalf("Failed to start engine: %v", err)
 	}

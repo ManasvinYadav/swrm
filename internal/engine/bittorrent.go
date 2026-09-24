@@ -1,8 +1,11 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/anacrolix/torrent"
@@ -41,6 +44,8 @@ type Engine struct {
 	downloadLimiter *rate.Limiter
 	uploadLimiter   *rate.Limiter
 
+	postDownloadCmd string
+
 	mu sync.RWMutex
 	// torrents/order/highlightedIdx together replace the old singular
 	// ActiveTorrent field: order is insertion order (drives the switcher
@@ -56,6 +61,9 @@ type Options struct {
 	ListenPort                 int
 	DHT                        bool
 	DownloadLimit, UploadLimit int
+	// PostDownloadCmd is run through the shell once each torrent's selected
+	// files have all finished downloading. Empty disables it.
+	PostDownloadCmd string
 }
 
 func NewEngine(vpnMgr *VpnManager, downloadDir string, options ...Options) (*Engine, error) {
@@ -78,7 +86,8 @@ func NewEngine(vpnMgr *VpnManager, downloadDir string, options ...Options) (*Eng
 
 	cfg.ListenPort = opts.ListenPort
 	ConfigureDHT(cfg, opts.DHT)
-	if vpnMgr.InterfaceName != "" {
+	bound := vpnMgr.InterfaceName != ""
+	if bound {
 		// torrent may initialize tcp4/udp4 listeners. Bind those sockets only to
 		// a real IPv4 address, never an IPv6 (especially fe80:: link-local) one.
 		ipv4, err := vpnMgr.IPv4Address()
@@ -94,6 +103,21 @@ func NewEngine(vpnMgr *VpnManager, downloadDir string, options ...Options) (*Eng
 			// IPv4 address is valid for all of those IPv4-capable networks.
 			return listenHost
 		}
+		// Everything below opens sockets the library would otherwise leave
+		// unbound, i.e. routed over the real interface:
+		//  - outgoing TCP peer connections use the library's own net.Dialer
+		//    (no Control hook, no local address), so replace the listener
+		//    sockets as dialers with interface-bound ones after NewClient;
+		//  - UDP tracker announces fall back to net.ListenPacket(":0");
+		//  - WebRTC (wss:// webtorrent trackers) gathers ICE candidates on
+		//    every local interface and asks public STUN servers for the
+		//    real public IP;
+		//  - UPnP/NAT-PMP talks to the physical LAN's router, which can't
+		//    forward ports for the tunnel anyway.
+		cfg.DialForPeerConns = false
+		cfg.TrackerListenPacket = vpnMgr.ListenPacket
+		cfg.DisableWebtorrent = true
+		cfg.NoDefaultPortForwarding = true
 	}
 	// No interface configured: bypass raw socket control and fall back to
 	// standard system routing (0.0.0.0 / default gateway), per the optional
@@ -109,8 +133,29 @@ func NewEngine(vpnMgr *VpnManager, downloadDir string, options ...Options) (*Eng
 	cfg.DownloadRateLimiter, cfg.UploadRateLimiter = dl, ul
 
 	client, err := torrent.NewClient(cfg)
+	if err != nil && !cfg.DisableIPv6 && errors.Is(err, syscall.EAFNOSUPPORT) {
+		// The host has no IPv6 stack at all (ipv6.disable=1, IPv4-only
+		// containers). The library treats a failed tcp6/udp6 listener as
+		// fatal rather than skipping it, so retry IPv4-only.
+		cfg.DisableIPv6 = true
+		client, err = torrent.NewClient(cfg)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create torrent client: %w", err)
+	}
+	if bound {
+		// DialForPeerConns is off, so the client has no peer dialers yet. The
+		// uTP sockets are already bound to the VPN address via ListenHost and
+		// dial from that same socket, so they're safe to reuse as-is; TCP gets
+		// an interface-bound dialer in place of the library's unbound one.
+		for _, l := range client.Listeners() {
+			if d, ok := l.(torrent.Dialer); ok && strings.HasPrefix(d.DialerNetwork(), "udp") {
+				client.AddDialer(d)
+			}
+		}
+		peerDialer := vpnMgr.Dialer()
+		peerDialer.KeepAlive = -1 // BitTorrent connections manage their own keep-alives.
+		client.AddDialer(torrent.NetworkDialer{Network: "tcp4", Dialer: peerDialer})
 	}
 
 	e := &Engine{
@@ -121,6 +166,7 @@ func NewEngine(vpnMgr *VpnManager, downloadDir string, options ...Options) (*Eng
 		uploadLimiter:   ul,
 		torrents:        make(map[metainfo.Hash]*TorrentHandle),
 		highlightedIdx:  -1,
+		postDownloadCmd: opts.PostDownloadCmd,
 	}
 	e.SetDownloadLimit(float64(opts.DownloadLimit))
 	e.SetUploadLimit(float64(opts.UploadLimit))
@@ -171,13 +217,55 @@ func (e *Engine) addAndTrack(addFn func() (*torrent.Torrent, error), src Torrent
 	}
 	hash := t.InfoHash()
 	e.mu.Lock()
-	if _, exists := e.torrents[hash]; !exists {
+	_, exists := e.torrents[hash]
+	if !exists {
 		e.torrents[hash] = &TorrentHandle{T: t, Source: src, AddedAt: time.Now()}
 		e.order = append(e.order, hash)
 	}
 	e.highlightLocked(hash)
 	e.mu.Unlock()
+	if !exists && e.postDownloadCmd != "" {
+		go e.runPostDownloadWhenComplete(t)
+	}
 	return t, nil
+}
+
+// runPostDownloadWhenComplete runs the configured post-download command once
+// every file the user selected for t has finished downloading. It gives up
+// if the torrent is closed first (engine shutdown or a VPN halt).
+func (e *Engine) runPostDownloadWhenComplete(t *torrent.Torrent) {
+	select {
+	case <-t.GotInfo():
+	case <-t.Closed():
+		return
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-t.Closed():
+			return
+		case <-ticker.C:
+			// Nothing selected yet (the file-selection modal is still open,
+			// or was dismissed) never counts as complete.
+			if done, total := selectedProgress(t); total > 0 && done >= total {
+				RunPostDownload(e.postDownloadCmd)
+				return
+			}
+		}
+	}
+}
+
+// selectedProgress sums completed and total bytes across t's selected files,
+// i.e. those with a priority other than PiecePriorityNone. Requires info.
+func selectedProgress(t *torrent.Torrent) (done, total int64) {
+	for _, f := range t.Files() {
+		if f.Priority() != torrent.PiecePriorityNone {
+			total += f.Length()
+			done += f.BytesCompleted()
+		}
+	}
+	return done, total
 }
 
 // highlightLocked sets highlightedIdx to hash's position in order. Caller
@@ -301,11 +389,10 @@ func (e *Engine) Close() {
 	}
 }
 
-// Halt stops all live network activity as soon as the VPN watchdog detects loss.
+// Halt stops all live network activity as soon as the VPN watchdog detects
+// loss. It deliberately doesn't hold mu: closing the client waits on every
+// torrent's teardown, and the UI's once-a-second Snapshot would otherwise
+// block on mu, freezing the dashboard exactly when it should show the drop.
 func (e *Engine) Halt() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.Client != nil {
-		e.Client.Close()
-	}
+	e.Close()
 }
